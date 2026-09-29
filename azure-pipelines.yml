@@ -40,5 +40,5 @@ stages:
       inputs:
         azureSubscription: 'SCll01' # 🔁 informar o nome do Service Connection criado
         appType: 'webApp'
-        appName: 'lmliacpaas001'
+        appName: 'lmliacpaas0002'
         package: 'src'
