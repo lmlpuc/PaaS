@@ -22,7 +22,7 @@ stages:
       inputs:
         deploymentScope: 'Resource Group'
         azureResourceManagerConnection: 'SCll01' # 🔁 informar o nome do Service Connection criado
-        subscriptionId: '5b52b32a-dc79-4c59-9677-c9a6972951be' # 🔁 substituir pelo ID da subscription Azure
+        subscriptionId: '4246eec3-ab51-462d-9fff-376f19e4e4b1' # 🔁 substituir pelo ID da subscription Azure
         action: 'Create Or Update Resource Group'
         resourceGroupName: '$(resourceGroupName)'
         location: '$(location)'
