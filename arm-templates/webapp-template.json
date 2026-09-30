@@ -15,6 +15,11 @@
     "skuCapacity": {
       "type": "int",
       "defaultValue": 1
+    },
+    "linuxFxVersion": {
+      "type": "string",
+      "defaultValue": "NODE|22-lts",
+      "metadata": { "description": "Runtime do App Service Linux (usado só para servir o HTML estático via pm2)" }
     }
   },
   "resources": [
@@ -23,14 +28,14 @@
       "apiVersion": "2022-03-01",
       "name": "[concat(parameters('siteName'), '-plan')]",
       "location": "[parameters('location')]",
-      "kind": "app",
+      "kind": "linux",
       "sku": {
         "name": "[parameters('skuName')]",
         "tier": "[parameters('skuTier')]",
         "capacity": "[parameters('skuCapacity')]"
       },
       "properties": {
-        "reserved": false
+        "reserved": true
       }
     },
     {
@@ -38,12 +43,20 @@
       "apiVersion": "2022-03-01",
       "name": "[parameters('siteName')]",
       "location": "[parameters('location')]",
-      "kind": "app",
+      "kind": "app,linux",
       "dependsOn": [
         "[resourceId('Microsoft.Web/serverfarms', concat(parameters('siteName'), '-plan'))]"
       ],
       "properties": {
-        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', concat(parameters('siteName'), '-plan'))]"
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', concat(parameters('siteName'), '-plan'))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "linuxFxVersion": "[parameters('linuxFxVersion')]",
+          "appCommandLine": "pm2 serve /home/site/wwwroot --no-daemon",
+          "appSettings": [
+            { "name": "SCM_DO_BUILD_DURING_DEPLOYMENT", "value": "false" }
+          ]
+        }
       }
     }
   ],
