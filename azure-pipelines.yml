@@ -82,6 +82,7 @@ stages:
     - task: AzureWebApp@1
       inputs:
         azureSubscription: 'SCll01' # 🔁 informar o nome do Service Connection criado
-        appType: 'webApp'
+        appType: 'webAppLinux'
         appName: '$(webAppName)'
         package: 'src'
+
