@@ -6,13 +6,13 @@
       "value": "lmliacpaas001"
     },
     "location": {
-      "value": "westus2"
+      "value": "centralus"
     },
     "skuName": {
-      "value": "B1"
+      "value": "D1"
     },
     "skuTier": {
-      "value": "Basic"
+      "value": "Shared"
     },
     "skuCapacity": {
       "value": 1
