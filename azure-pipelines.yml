@@ -5,62 +5,28 @@ pool:
   name: Default # 🔁 Nome do agent pool
   demands:
     - Agent.Name -equals LML001  # 🔁 Força o uso do agente específico - informar o nome do Agente criado
-  vmImage: 'windows-latest'
 
 variables:
-  resourceGroupName: rg-iac-webapp
-  location: centralus
-  templateFile: arm-templates/webapp-template.json
-  parametersFile: arm-templates/webapp-parameters.json
-  webAppBaseName: lmliacpaas  # 🔁 Prefixo do nome do Web App (o pipeline acrescenta um sufixo numérico)
+  resourceGroupName: rg-iac-swa
+  location: westus2              # Static Web Apps só aceita: westus2, centralus, eastus2, westeurope, eastasia
+  staticSiteName: swa-iac-paas   # Único só dentro do resource group (a URL pública é gerada pela Azure)
+  skuName: Standard              # Standard = pago (~US$ 9/mês) | Free = gratuito
+  templateFile: arm-templates/staticwebapp-template.json
+  parametersFile: arm-templates/staticwebapp-parameters.json
+  azureConnection: SCll01        # 🔁 informar o nome do Service Connection criado
 
 stages:
 - stage: DeployInfrastructure
+  displayName: 'Provisionar Static Web App'
   jobs:
   - job: ARM_Deployment
+    timeoutInMinutes: 20
     steps:
-    # Define o nome do Web App no momento da execução:
-    # 1) se o Resource Group já tem um Web App com o prefixo, reutiliza (evita criar um app novo a cada execução)
-    # 2) senão, sorteia um sufixo e testa na Azure se o nome está livre (nomes de Web App são globais)
-    - task: AzureCLI@2
-      name: defineName
-      displayName: 'Definir nome do Web App'
-      inputs:
-        azureSubscription: 'SCll01' # 🔁 informar o nome do Service Connection criado
-        scriptType: 'ps'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          $rg   = '$(resourceGroupName)'
-          $base = '$(webAppBaseName)'.ToLower()
-          $name = $null
-
-          if ((az group exists --name $rg) -eq 'true') {
-            $name = az webapp list --resource-group $rg --query "[?starts_with(name, '$base')].name | [0]" -o tsv
-          }
-
-          if ($name) {
-            Write-Host "Web App já existente no Resource Group $rg - reutilizando: $name"
-          } else {
-            $subId = az account show --query id -o tsv
-            $url = "https://management.azure.com/subscriptions/$subId/providers/Microsoft.Web/checknameavailability?api-version=2022-03-01"
-            for ($i = 1; $i -le 10 -and -not $name; $i++) {
-              $candidate = '{0}{1:D5}' -f $base, (Get-Random -Minimum 0 -Maximum 100000)
-              '{"name":"' + $candidate + '","type":"Microsoft.Web/sites"}' | Out-File -FilePath body.json -Encoding ascii
-              $available = az rest --method post --url $url --body '@body.json' --query nameAvailable -o tsv
-              if ($available -eq 'true') { $name = $candidate } else { Write-Host "Nome $candidate indisponível, tentando outro..." }
-            }
-            if (-not $name) { Write-Error 'Não foi possível encontrar um nome livre para o Web App.'; exit 1 }
-            Write-Host "Nome livre encontrado: $name"
-          }
-
-          # Variável para este job e variável de saída para o estágio DeployApp
-          Write-Host "##vso[task.setvariable variable=webAppName]$name"
-          Write-Host "##vso[task.setvariable variable=webAppName;isOutput=true]$name"
-
     - task: AzureResourceManagerTemplateDeployment@3
+      displayName: 'Deploy ARM Template (Static Web App)'
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: 'SCll01' # 🔁 informar o nome do Service Connection criado
+        azureResourceManagerConnection: '$(azureConnection)'
         subscriptionId: '4246eec3-ab51-462d-9fff-376f19e4e4b1' # 🔁 substituir pelo ID da subscription Azure
         action: 'Create Or Update Resource Group'
         resourceGroupName: '$(resourceGroupName)'
@@ -68,20 +34,54 @@ stages:
         templateLocation: 'Linked artifact'
         csmFile: '$(templateFile)'
         csmParametersFile: '$(parametersFile)'
-        overrideParameters: '-siteName $(webAppName) -location $(location)'
+        overrideParameters: '-staticSiteName $(staticSiteName) -location $(location) -skuName $(skuName)'
         deploymentMode: 'Incremental'
 
 - stage: DeployApp
+  displayName: 'Publicar site'
   dependsOn: DeployInfrastructure
   jobs:
   - job: Publish_HTML
-    variables:
-      # Nome definido no estágio anterior
-      webAppName: $[ stageDependencies.DeployInfrastructure.ARM_Deployment.outputs['defineName.webAppName'] ]
+    timeoutInMinutes: 20
     steps:
-    - task: AzureWebApp@1
+    # Obtém o token de deploy do Static Web App (fica como variável secreta, não aparece no log)
+    - task: AzureCLI@2
+      displayName: 'Obter token de deploy'
       inputs:
-        azureSubscription: 'SCll01' # 🔁 informar o nome do Service Connection criado
-        appType: 'webApp'
-        appName: '$(webAppName)'
-        package: 'src'
+        azureSubscription: '$(azureConnection)'
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          $token = az staticwebapp secrets list --name $(staticSiteName) --resource-group $(resourceGroupName) --query properties.apiKey -o tsv
+          if (-not $token) { Write-Error 'Não foi possível obter o token de deploy.'; exit 1 }
+          Write-Host "##vso[task.setvariable variable=swaToken;issecret=true]$token"
+
+    # Garante o Node.js no agente (necessário para a SWA CLI)
+    - task: UseNode@1
+      displayName: 'Instalar Node.js'
+      inputs:
+        version: '22.x'
+
+    # Publica a pasta src (index.html) no ambiente de produção
+    # (a tarefa AzureStaticWebApp@0 usa Docker/Linux e não roda em agente Windows, por isso a SWA CLI)
+    - task: PowerShell@2
+      displayName: 'Publicar src no Static Web App'
+      inputs:
+        targetType: 'inline'
+        pwsh: false
+        workingDirectory: '$(System.DefaultWorkingDirectory)'
+        script: |
+          npx --yes @azure/static-web-apps-cli@latest deploy ./src --env production --deployment-token $env:SWA_TOKEN
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      env:
+        SWA_TOKEN: $(swaToken)
+
+    - task: AzureCLI@2
+      displayName: 'Mostrar URL do site'
+      inputs:
+        azureSubscription: '$(azureConnection)'
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          $hostName = az staticwebapp show --name $(staticSiteName) --resource-group $(resourceGroupName) --query defaultHostname -o tsv
+          Write-Host "Site publicado em: https://$hostName"
