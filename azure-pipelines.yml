@@ -7,7 +7,7 @@ pool:
     - Agent.Name -equals LML001  # 🔁 Força o uso do agente específico - informar o nome do Agente criado
 
 variables:
-  resourceGroupName: rg-iac-webapp
+  resourceGroupName: rg-iac-web-paas01
   location: westus2              # Static Web Apps só aceita: westus2, centralus, eastus2, westeurope, eastasia
   staticSiteName: swa-iac-paas   # Único só dentro do resource group (a URL pública é gerada pela Azure)
   skuName: Standard              # Standard = pago (~US$ 9/mês) | Free = gratuito
