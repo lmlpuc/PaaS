@@ -9,7 +9,7 @@ pool:
 
 variables:
   resourceGroupName: rg-iac-webapp
-  location: westus2
+  location: centralus
   templateFile: arm-templates/webapp-template.json
   parametersFile: arm-templates/webapp-parameters.json
   webAppBaseName: lmliacpaas  # 🔁 Prefixo do nome do Web App (o pipeline acrescenta um sufixo numérico)
@@ -82,7 +82,6 @@ stages:
     - task: AzureWebApp@1
       inputs:
         azureSubscription: 'SCll01' # 🔁 informar o nome do Service Connection criado
-        appType: 'webAppLinux'
+        appType: 'webApp'
         appName: '$(webAppName)'
         package: 'src'
-
