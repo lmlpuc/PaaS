@@ -9,10 +9,10 @@
       "value": "centralus"
     },
     "skuName": {
-      "value": "D1"
+      "value": "F1"
     },
     "skuTier": {
-      "value": "Shared"
+      "value": "Free"
     },
     "skuCapacity": {
       "value": 1
