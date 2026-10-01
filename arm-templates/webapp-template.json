@@ -6,11 +6,11 @@
     "location": { "type": "string" },
     "skuName": {
       "type": "string",
-      "defaultValue": "D1"
+      "defaultValue": "F1"
     },
     "skuTier": {
       "type": "string",
-      "defaultValue": "Shared"
+      "defaultValue": "Free"
     },
     "skuCapacity": {
       "type": "int",
